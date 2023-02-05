@@ -1,19 +1,24 @@
-import { Duration, Stack, StackProps } from 'aws-cdk-lib';
-import * as sns from 'aws-cdk-lib/aws-sns';
-import * as subs from 'aws-cdk-lib/aws-sns-subscriptions';
-import * as sqs from 'aws-cdk-lib/aws-sqs';
+import { Stack, StackProps } from 'aws-cdk-lib';
+import { Function, Runtime, Code } from 'aws-cdk-lib/aws-lambda'
+import { RestApi, LambdaIntegration } from 'aws-cdk-lib/aws-apigateway'
 import { Construct } from 'constructs';
+
+import { lambdas } from '../src/lambdas'
 
 export class LambdaMonorepoStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
-    const queue = new sqs.Queue(this, 'LambdaMonorepoQueue', {
-      visibilityTimeout: Duration.seconds(300)
-    });
+    const restApi = new RestApi(this, 'LambdaMonorepoAPI', {});
 
-    const topic = new sns.Topic(this, 'LambdaMonorepoTopic');
+    for (const { route, method, name, location, handlerFile } of lambdas) {
+      const currentLambda = new Function(this, name, {
+        handler: handlerFile,
+        runtime: Runtime.NODEJS_18_X,
+        code: Code.fromAsset(location)
+      });
 
-    topic.addSubscription(new subs.SqsSubscription(queue));
+      restApi.root.addResource(route).addMethod(method, new LambdaIntegration(currentLambda))
+    }
   }
 }
